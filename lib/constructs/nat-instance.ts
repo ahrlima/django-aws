@@ -5,19 +5,24 @@ import * as cdk from "aws-cdk-lib";
 
 export interface NatInstanceConstructProps {
   vpc: ec2.IVpc;
-  baseName: string;
-  enableNatInstance?: boolean;
+  namer: (resource: string) => string;
+  enableNatInstance: boolean;
+  instanceType: string;
+  allowedSshCidrs: string[];
 }
 
+/**
+ * Optionally provisions a cost-effective NAT Instance for development
+ * environments, configured for Session Manager access and global naming.
+ */
 export class NatInstanceConstruct extends Construct {
   readonly instance?: ec2.Instance;
 
   constructor(scope: Construct, id: string, props: NatInstanceConstructProps) {
     super(scope, id);
 
-    const { vpc, baseName, enableNatInstance = false } = props;
-    if (!enableNatInstance) {
-      new cdk.CfnOutput(this, "NatInstanceSkipped", { value: "NAT Instance disabled" });
+    if (!props.enableNatInstance) {
+      new cdk.CfnOutput(this, "NatInstanceSkipped", { value: "NAT instance disabled" });
       return;
     }
 
@@ -26,33 +31,41 @@ export class NatInstanceConstruct extends Construct {
       owners: ["amazon"],
     });
 
-    const sg = new ec2.SecurityGroup(this, `NatSg-${baseName}`, {
-      vpc,
+    const securityGroup = new ec2.SecurityGroup(this, "NatSecurityGroup", {
+      vpc: props.vpc,
+      securityGroupName: props.namer("sg-nat"),
       allowAllOutbound: true,
-      description: "NAT Instance Security Group",
+      description: "Security group for NAT instance (prefer SSM over SSH).",
     });
-    // SSH only if needed; prefer SSM
-    sg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), "SSH (debug only)");
 
-    const role = new iam.Role(this, `NatRole-${baseName}`, {
+    for (const cidr of props.allowedSshCidrs) {
+      securityGroup.addIngressRule(
+        ec2.Peer.ipv4(cidr),
+        ec2.Port.tcp(22),
+        "Temporary SSH access",
+      );
+    }
+
+    const instanceRole = new iam.Role(this, "NatInstanceRole", {
+      roleName: props.namer("role-nat"),
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
       ],
     });
 
-    this.instance = new ec2.Instance(this, `NatInstance-${baseName}`, {
-      vpc,
+    this.instance = new ec2.Instance(this, "NatInstance", {
+      instanceName: props.namer("nat"),
+      vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: new ec2.InstanceType(props.instanceType),
       machineImage: natAmi,
-      securityGroup: sg,
-      role,
+      securityGroup,
+      role: instanceRole,
     });
 
-    // Disable Source/Dest Check
-    const cfn = this.instance.node.defaultChild as ec2.CfnInstance;
-    cfn.sourceDestCheck = false;
+    const cfnInstance = this.instance.node.defaultChild as ec2.CfnInstance;
+    cfnInstance.sourceDestCheck = false;
 
     new cdk.CfnOutput(this, "NatInstancePublicIp", {
       value: this.instance.instancePublicIp,
