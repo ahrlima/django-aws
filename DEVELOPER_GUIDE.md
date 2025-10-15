@@ -70,7 +70,7 @@ the team.
   4. Push the image to ECR
   5. Deploy the stack via `cdk deploy -c env=dev -c imageTag=<commit-sha>`
 
-Make sure the stack has been deployed once manually so the ECR repository exists. Set the secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the GitHub repository for the workflow to authenticate.
+Make sure the stack has been deployed once manually so the ECR repository exists. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stack; the workflow uses that role instead of long-lived access keys.
 
 ## Troubleshooting
 - **Lambda db-init fails**: ensure private subnets have egress (NAT Instance or Gateway) and security groups allow 5432 to RDS.

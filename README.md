@@ -58,11 +58,9 @@ cdk deploy -c env=dev -c imageTag=latest
 ```
 
 ## CI/CD (GitHub Actions)
-A workflow in `.github/workflows/deploy.yml` automates build → test → push → deploy on pushes to `main`. Configure the following repository secrets before enabling it:
+A workflow in `.github/workflows/deploy.yml` automates build → test → push → deploy on pushes to `main`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to push to ECR and run CDK.
 
-- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` for a user/role permitted to push to ECR and run CDK.
-
-Provide required environment variables at the top of the workflow if you change the region or stack name. For the first deployment run `cdk deploy -c env=dev` manually so the ECR repository exists before the workflow pushes images.
+Adjust the region/stack variables at the top of the workflow if necessary. Perform the first deploy manually (`cdk deploy -c env=dev`) to create the ECR repository before the pipeline attempts to push.
 
 ## Cost Awareness Summary
 - **RDS t3.micro**: covered by Free Tier (up to 750 hours)
