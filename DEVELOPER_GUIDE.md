@@ -68,9 +68,12 @@ the team.
   2. Derive the repo URI from the deployed stack output
   3. Build the Docker image from `app/`, run `python manage.py test` inside the container
   4. Push the image to ECR
-  5. Deploy the stack via `cdk deploy -c env=dev -c imageTag=<commit-sha>`
+5. Deploy the stack via `cdk deploy -c env=dev -c imageTag=<commit-sha>`
 
 Make sure the stack has been deployed once manually so the ECR repository exists. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stack; the workflow uses that role instead of long-lived access keys.
+
+### Region overrides
+The stack derives its AWS region from the environment configuration (`config/environments.ts`). To target a different region during deployment or CI, pass `-c region=<aws-region>` to `cdk synth|deploy`; that value takes precedence over both the environment file and shell variables such as `CDK_DEFAULT_REGION`.
 
 ## Troubleshooting
 - **Lambda db-init fails**: ensure private subnets have egress (NAT Instance or Gateway) and security groups allow 5432 to RDS.

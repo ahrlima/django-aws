@@ -19,8 +19,8 @@ Production-style infrastructure (IaC) for a Django app on **Amazon ECS Fargate**
 ## Deploy (quick start)
 ```bash
 npm install
-cdk bootstrap
-cdk deploy -c env=dev
+cdk bootstrap --region us-east-1
+cdk deploy --region us-east-1 -c env=dev
 ```
 
 > Replace the container image in `lib/constructs/ecs.ts` (or the matching entry in `config/environments.ts`) with the image you publish to ECR for your Django app.
@@ -54,7 +54,9 @@ docker tag myapp <repo-uri>:latest
 docker push <repo-uri>:latest
 
 # Deploy infrastructure/tasks with that tag
-cdk deploy -c env=dev -c imageTag=latest
+cdk deploy --region us-east-1 -c env=dev -c imageTag=latest
+
+> Tip: the stack now honours a `-c region=<aws-region>` context override. Use it if you need to deploy an environment to a region different from the default defined in `config/environments.ts`.
 ```
 
 ## CI/CD (GitHub Actions)
