@@ -30,6 +30,11 @@ config/
   globals.ts           # Naming helpers, default tags, security toggles
 lambda/
   db_init/             # Python Lambda to create DB roles & app_user
+app/
+  Dockerfile           # Builds the Django container image
+  requirements.txt     # Python dependencies for the app
+  manage.py            # Django management entrypoint
+  testapp/             # Django project (views, urls, settings, tests)
 ```
 
 ## NAT Instance (Cost-Driven and Ethical Engineering Decision)
@@ -69,12 +74,18 @@ the team.
 - Steps:
   1. Install CDK dependencies (`npm ci && npm run build`)
   2. Build the Docker image from `app/` and run `python manage.py test` inside the container
-  3. Deploy the stacks via `cdk deploy -c env=dev NetworkStack-dev DataStack-dev AppStack-dev`
+  3. Deploy the application stack via `cdk deploy -c env=dev AppStack-dev`
 
-Ensure the target account/region has been bootstrapped (`cdk bootstrap`) so the CDK can push Docker assets. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stacks; the workflow uses that role instead of long-lived access keys.
+Infrastructure stacks (`NetworkStack`, `DataStack`) must be deployed manually when changes are required. Ensure the target account/region has been bootstrapped (`cdk bootstrap`) so the CDK can push Docker assets. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stacks; the workflow uses that role instead of long-lived access keys.
 
 ### Region overrides
 The stack derives its AWS region from the environment configuration (`config/environments.ts`). To target a different region during deployment or CI, pass `-c region=<aws-region>` to `cdk synth|deploy`; that value takes precedence over both the environment file and shell variables such as `CDK_DEFAULT_REGION`.
+
+## Roadmap / Future Improvements
+- Front the ALB with Route 53 hosted zones and records to expose friendly application domains.
+- Provision ACM certificates per environment and switch the ALB listeners to HTTPS (port 443).
+- Migrate the database layer to Amazon Aurora for multi-AZ resilience and managed replicas.
+- Integrate Amazon Cognito with IAM to centralise user lifecycle and control who can assume operational roles in the AWS account.
 
 ## Troubleshooting
 - **Lambda db-init fails**: ensure private subnets have egress (NAT Instance or Gateway) and security groups allow 5432 to RDS.

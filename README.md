@@ -61,6 +61,8 @@ cdk deploy --region us-east-1 -c env=dev AppStack-dev
 ## CI/CD (GitHub Actions)
 A workflow in `.github/workflows/deploy.yml` automates build → test → deploy on pushes to `main`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to deploy the stacks and publish CDK assets (ECR + S3) in the target account.
 
+The pipeline deploys only `AppStack-<env>` so that infrastructure changes (VPC, RDS) can be rolled out deliberately. Run `cdk deploy ... NetworkStack-<env> DataStack-<env>` manually when you need to update those layers.
+
 Adjust the region/stack variables at the top of the workflow if necessary. Ensure the environment has been bootstrapped (`cdk bootstrap`) so the CDK can provision asset repositories automatically.
 
 ## Cost Awareness Summary
@@ -81,6 +83,12 @@ def generate_token():
 
 ## Optional Read Replica
 Set `rds.enableReplica` to `true` in `config/environments.ts` (per environment) to deploy a read replica. It is disabled by default to stay within Free Tier.
+
+## Future Improvements
+- Integrate **Amazon Route 53** to provision custom DNS records for the ALB so the application is reached through branded hostnames instead of the default AWS address.
+- Issue **AWS Certificate Manager** certificates and wire them into the ALB listeners to serve traffic over HTTPS (port 443) end-to-end.
+- Replace the single-instance RDS with an **Amazon Aurora** cluster for improved availability, performance, and automatic storage scaling.
+- Add **Amazon Cognito** user pools (federated with IAM) to centralise identity and control which operators can access the AWS account and application backplane.
 
 ## NAT Instance (dev only)
 See **DEVELOPER_GUIDE.md** for the cost rationale, security posture (Session Manager enabled), and production guidance when switching back to managed NAT Gateways.
