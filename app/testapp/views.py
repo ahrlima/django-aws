@@ -2,7 +2,7 @@ from django.http import HttpResponse
 
 
 def hello_world(request):
-    return HttpResponse('Put the faith in the light', status=200)
+    return HttpResponse('Put yours faith in the light', status=200)
 
 
 def health_check(request):
