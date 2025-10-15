@@ -30,7 +30,7 @@ export interface EcsSettings {
   cpu: number;
   memoryMiB: number;
   desiredCount: number;
-  image: string;
+  imageTag: string;
   containerPort: number;
   assignPublicIp: boolean;
   minCapacity: number;
@@ -44,12 +44,6 @@ export interface ObservabilitySettings {
   logRetentionDays: number;
 }
 
-export interface RemoteStateSettings {
-  enabled: boolean;
-  bucketName?: string;
-  tableName?: string;
-}
-
 export interface EnvironmentSettings {
   region: string;
   service: string;
@@ -60,15 +54,14 @@ export interface EnvironmentSettings {
   rds: RdsSettings;
   ecs: EcsSettings;
   observability: ObservabilitySettings;
-  remoteState?: RemoteStateSettings;
   tagOverrides?: Partial<GlobalTagValues>;
 }
 
 const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
   dev: {
     region: "us-east-1",
-    service: "django",
-    client: "matific",
+    service: "djg",
+    client: "and",
     confidentiality: "internal",
     vpc: {
       cidr: "10.10.0.0/16",
@@ -95,7 +88,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       cpu: 256,
       memoryMiB: 512,
       desiredCount: 1,
-      image: "public.ecr.aws/docker/library/nginx:latest",
+      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: true,
       minCapacity: 1,
@@ -105,9 +98,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
     observability: {
       alertEmail: "alerts-dev@example.com",
       logRetentionDays: 7,
-    },
-    remoteState: {
-      enabled: true,
     },
   },
   hml: {
@@ -136,7 +126,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       cpu: 512,
       memoryMiB: 1024,
       desiredCount: 2,
-      image: "public.ecr.aws/docker/library/nginx:latest",
+      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: false,
       minCapacity: 1,
@@ -146,9 +136,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
     observability: {
       alertEmail: "alerts-hml@example.com",
       logRetentionDays: 14,
-    },
-    remoteState: {
-      enabled: true,
     },
   },
   prd: {
@@ -177,7 +164,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       cpu: 512,
       memoryMiB: 1024,
       desiredCount: 3,
-      image: "public.ecr.aws/docker/library/nginx:latest",
+      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: false,
       minCapacity: 2,
@@ -187,9 +174,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
     observability: {
       alertEmail: "alerts-prod@example.com",
       logRetentionDays: 30,
-    },
-    remoteState: {
-      enabled: true,
     },
     tagOverrides: {
       confidentiality: "secret",

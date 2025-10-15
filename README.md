@@ -30,37 +30,39 @@ All environment-specific settings live in `config/environments.ts`. Duplicate th
 - `service` and `client` control the naming convention for AWS resources.
 - `nat.useNatInstance` toggles the development NAT instance in place of NAT Gateways.
 - `rds.enableReplica` provisions an optional read replica when set to `true`.
-- `ecs.image` should reference the container image tag you want the ECS service to run.
+- `ecs.imageTag` chooses which tag the ECS service should deploy from the provisioned ECR repository.
 - `observability.alertEmail` sets the destination for CloudWatch alarms.
-- `remoteState.enabled` provisions the shared Terraform remote state bucket/table (see below). Optionally provide `bucketName` and `tableName` to override the auto-generated names.
-  
+
 Global defaults (naming, tagging, security toggles) are defined in `config/globals.ts`.
 
 Pass `-c env=<name>` (or `-c environment=<name>`) to select which configuration block to deploy.
 
 ## Application image
-Push your Django container to ECR (or another registry the account can reach) before deployment. Point `ecs.image` to that URI, or update the value directly in `lib/constructs/ecs.ts` if you prefer to hard-code it in the stack.
+The stack now creates an Amazon ECR repository (`EcrRepositoryUri` output). Build the container in `app/`, push it to that repository, and update the running service by supplying the new tag (`-c imageTag=<tag>`). The default configuration ships with `imageTag: "latest"` for local iteration.
 
-## Terraform remote state
-For a small team (≈3 engineers), the stack can create a shared Terraform remote state backend backed by **Amazon S3** with **DynamoDB** locking. Enable it by keeping `remoteState.enabled = true` in `config/environments.ts` (default). On deployment the stack outputs:
-- `RemoteStateBucketName` — versioned, SSE-enabled bucket (with `RETAIN` removal policy) to hold `.tfstate`.
-- `RemoteStateLockTableName` — DynamoDB table (on-demand billing, `RETAIN`) used to coordinate state locks.
+Example manual flow:
 
-Example Terraform backend configuration:
+```bash
+# Build & test locally
+docker build -t myapp ./app
+docker run --rm myapp python manage.py test
 
-```hcl
-terraform {
-  backend "s3" {
-    bucket         = "<RemoteStateBucketName output>"
-    key            = "terraform/dev/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "<RemoteStateLockTableName output>"
-    encrypt        = true
-  }
-}
+# Authenticate to ECR and push
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
+docker tag myapp <repo-uri>:latest
+docker push <repo-uri>:latest
+
+# Deploy infrastructure/tasks with that tag
+cdk deploy -c env=dev -c imageTag=latest
 ```
 
-Override `bucketName`/`tableName` in the environment config if you need predictable names (ensuring global uniqueness for buckets).
+## CI/CD (GitHub Actions)
+A workflow in `.github/workflows/deploy.yml` automates build → test → push → deploy on pushes to `main`. Configure the following repository secrets before enabling it:
+
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` for a user/role permitted to push to ECR and run CDK.
+
+Provide required environment variables at the top of the workflow if you change the region or stack name. For the first deployment run `cdk deploy -c env=dev` manually so the ECR repository exists before the workflow pushes images.
 
 ## Cost Awareness Summary
 - **RDS t3.micro**: covered by Free Tier (up to 750 hours)

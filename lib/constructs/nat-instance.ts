@@ -26,10 +26,11 @@ export class NatInstanceConstruct extends Construct {
       return;
     }
 
-    const natAmi = ec2.MachineImage.fromSsmParameter(
-      "/aws/service/ami-amazon-linux-latest/amzn2-ami-vpc-nat-hvm-x86_64-ebs",
-      { os: ec2.OperatingSystemType.LINUX },
-    );
+    const natAmi = ec2.MachineImage.latestAmazonLinux2({
+      cachedInContext: true,
+      virtualization: ec2.AmazonLinuxVirt.HVM,
+      storage: ec2.AmazonLinuxStorage.GENERAL_PURPOSE,
+    });
 
     const securityGroup = new ec2.SecurityGroup(this, "NatSecurityGroup", {
       vpc: props.vpc,
@@ -54,6 +55,22 @@ export class NatInstanceConstruct extends Construct {
       ],
     });
 
+    const userData = ec2.UserData.forLinux();
+    userData.addCommands(
+      "set -xe",
+      "yum install -y iptables-services",
+      "systemctl enable iptables",
+      "sysctl -w net.ipv4.ip_forward=1",
+      "sed -i '/^net.ipv4.ip_forward/d' /etc/sysctl.conf",
+      "echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf",
+      "iptables -t nat -F",
+      "iptables -F",
+      "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+      "iptables -A FORWARD -i eth0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT",
+      "iptables -A FORWARD -i eth0 -o eth0 -j ACCEPT",
+      "service iptables save",
+    );
+
     this.instance = new ec2.Instance(this, "NatInstance", {
       instanceName: props.namer("nat"),
       vpc: props.vpc,
@@ -62,6 +79,7 @@ export class NatInstanceConstruct extends Construct {
       machineImage: natAmi,
       securityGroup,
       role: instanceRole,
+      userData,
     });
 
     const cfnInstance = this.instance.node.defaultChild as ec2.CfnInstance;

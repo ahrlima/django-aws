@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import * as guardduty from "aws-cdk-lib/aws-guardduty";
+import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import { Construct } from "constructs";
 import { naming, applyGlobalTags } from "../config/globals";
@@ -11,7 +12,6 @@ import { RdsConstruct } from "./constructs/rds";
 import { DbInitConstruct } from "./constructs/db-init";
 import { ObservabilityConstruct } from "./constructs/observability";
 import { EcsConstruct } from "./constructs/ecs";
-import { RemoteStateConstruct } from "./constructs/remote-state";
 
 interface MainStackProps extends cdk.StackProps {
   envName: EnvironmentName;
@@ -94,13 +94,23 @@ export class MainStack extends cdk.Stack {
       alertEmail: config.observability.alertEmail,
     });
 
+    const repository = new ecr.Repository(this, "AppRepository", {
+      repositoryName: nameFor("app"),
+      imageScanOnPush: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      lifecycleRules: [{ maxImageCount: 10 }],
+    });
+
+    const imageTag = this.node.tryGetContext("imageTag") ?? config.ecs.imageTag;
+
     const ecs = new EcsConstruct(this, "Ecs", {
       vpc: vpc.vpc,
       namer: nameFor,
       cpu: config.ecs.cpu,
       memoryMiB: config.ecs.memoryMiB,
       desiredCount: config.ecs.desiredCount,
-      image: config.ecs.image,
+      repository,
+      imageTag,
       containerPort: config.ecs.containerPort,
       assignPublicIp: config.ecs.assignPublicIp,
       minCapacity: config.ecs.minCapacity,
@@ -118,14 +128,6 @@ export class MainStack extends cdk.Stack {
 
     observability.configureServiceAlarms(ecs.service);
     observability.configureAlbAlarms(ecs.alb);
-
-    if (config.remoteState?.enabled) {
-      new RemoteStateConstruct(this, "RemoteState", {
-        namer: nameFor,
-        bucketName: config.remoteState.bucketName,
-        tableName: config.remoteState.tableName,
-      });
-    }
 
     if (globals.security.enableGuardDuty) {
       new guardduty.CfnDetector(this, "GuardDutyDetector", { enable: true });
@@ -151,5 +153,6 @@ export class MainStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "AlbDnsName", { value: ecs.alb.loadBalancerDnsName });
     new cdk.CfnOutput(this, "RdsEndpoint", { value: database.db.dbInstanceEndpointAddress });
+    new cdk.CfnOutput(this, "EcrRepositoryUri", { value: repository.repositoryUri });
   }
 }

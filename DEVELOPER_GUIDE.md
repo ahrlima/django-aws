@@ -60,27 +60,17 @@ Deployment metadata (service name, client, NAT strategy, tags) is defined in
 `config/environments.ts` and `config/globals.ts`, keeping stacks consistent across
 the team.
 
-## Terraform remote state (S3 + DynamoDB)
-Teams of 3± engineers can safely share Terraform state using the optional remote-state resources the stack provisions when `remoteState.enabled = true` (default in `config/environments.ts`):
+## CI/CD workflow
+- Workflow file: `.github/workflows/deploy.yml`
+- Trigger: push to `main` (and manual dispatch)
+- Steps:
+  1. Install CDK dependencies (`npm ci && npm run build`)
+  2. Derive the repo URI from the deployed stack output
+  3. Build the Docker image from `app/`, run `python manage.py test` inside the container
+  4. Push the image to ECR
+  5. Deploy the stack via `cdk deploy -c env=dev -c imageTag=<commit-sha>`
 
-- **S3 bucket** — versioned, SSL-enforced, and encrypted with S3-managed keys. `RemovalPolicy.RETAIN` keeps state files if you delete the stack.
-- **DynamoDB table** — `LockID` primary key, on-demand billing, encryption enabled, and retained on stack deletion to avoid losing lock history.
-
-After `cdk deploy`, capture the `RemoteStateBucketName` and `RemoteStateLockTableName` outputs and wire them into your Terraform backend:
-
-```hcl
-terraform {
-  backend "s3" {
-    bucket         = "<RemoteStateBucketName>"
-    key            = "terraform/dev/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "<RemoteStateLockTableName>"
-    encrypt        = true
-  }
-}
-```
-
-To use custom names (e.g., pre-approved naming standards), set `remoteState.bucketName` and/or `remoteState.tableName` in the environment config—making sure the bucket name remains globally unique and DNS compliant.
+Make sure the stack has been deployed once manually so the ECR repository exists. Set the secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the GitHub repository for the workflow to authenticate.
 
 ## Troubleshooting
 - **Lambda db-init fails**: ensure private subnets have egress (NAT Instance or Gateway) and security groups allow 5432 to RDS.

@@ -51,7 +51,6 @@ export const globals: GlobalsConfig = {
     enableWaf: false,
     logGroupPrefix: "/aws/django-ecs",
     kmsAliases: {
-      logs: "alias/aws/logs",
       rds: "alias/aws/rds",
     },
   },
