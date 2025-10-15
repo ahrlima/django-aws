@@ -22,7 +22,6 @@ export interface RdsSettings {
   adminUser: string;
   appUser: string;
   backupRetentionDays: number;
-  deletionProtection: boolean;
   enableReplica: boolean;
 }
 
@@ -81,7 +80,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       adminUser: "postgres",
       appUser: "app_user",
       backupRetentionDays: 7,
-      deletionProtection: false,
       enableReplica: false,
     },
     ecs: {
@@ -119,7 +117,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       adminUser: "postgres",
       appUser: "app_user",
       backupRetentionDays: 14,
-      deletionProtection: true,
       enableReplica: false,
     },
     ecs: {
@@ -157,7 +154,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       adminUser: "postgres",
       appUser: "app_user",
       backupRetentionDays: 35,
-      deletionProtection: true,
       enableReplica: true,
     },
     ecs: {

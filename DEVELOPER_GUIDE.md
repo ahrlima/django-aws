@@ -18,7 +18,7 @@ lib/
   constructs/
     vpc.ts             # VPC with manual AZ selection, /26 public & /22 private
     nat-instance.ts    # EC2 NAT for dev/lab (Free Tier mode)
-    rds.ts             # RDS Postgres with IAM Auth and optional replica
+    rds.ts             # RDS Postgres with IAM Auth, deletion protection, and optional replica
     ecs.ts             # ECS Fargate + ALB + autoscaling
     observability.ts   # CloudWatch logs, metrics, SNS
   main-stack.ts        # Orchestration of all modules

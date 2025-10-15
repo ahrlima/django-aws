@@ -17,7 +17,6 @@ export interface RdsConstructProps {
   adminUser: string;
   appUser: string;
   backupRetentionDays: number;
-  deletionProtection: boolean;
   enableReplica: boolean;
 }
 
@@ -51,14 +50,16 @@ export class RdsConstruct extends Construct {
       credentials: rds.Credentials.fromGeneratedSecret(props.adminUser),
       databaseName: props.databaseName,
       backupRetention: cdk.Duration.days(props.backupRetentionDays),
-      deletionProtection: props.deletionProtection,
-      removalPolicy: props.deletionProtection
-        ? cdk.RemovalPolicy.RETAIN
-        : cdk.RemovalPolicy.DESTROY,
+      deletionProtection: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
       storageEncrypted: props.security.enforceEncryptionAtRest,
       storageEncryptionKey: kmsKey,
       cloudwatchLogsExports: ["postgresql"],
       cloudwatchLogsRetention: logs.RetentionDays.ONE_WEEK,
+    });
+
+    this.db.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN, {
+      applyToUpdateReplacePolicy: true,
     });
 
     if (props.enableReplica) {
@@ -68,8 +69,11 @@ export class RdsConstruct extends Construct {
         instanceType: new ec2.InstanceType(props.instanceType),
         vpc: props.vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-        deletionProtection: props.deletionProtection,
+        deletionProtection: true,
         publiclyAccessible: false,
+      });
+      this.replica.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN, {
+        applyToUpdateReplacePolicy: true,
       });
     }
   }

@@ -30,6 +30,7 @@ All environment-specific settings live in `config/environments.ts`. Duplicate th
 - `service` and `client` control the naming convention for AWS resources.
 - `nat.useNatInstance` toggles the development NAT instance in place of NAT Gateways.
 - `rds.enableReplica` provisions an optional read replica when set to `true`.
+- The primary RDS instance is provisioned with deletion protection and a `RETAIN` removal policy so the database survives stack rollbacks or accidental deletes.
 - `ecs.imageTag` chooses which tag the ECS service should deploy from the provisioned ECR repository.
 - `observability.alertEmail` sets the destination for CloudWatch alarms.
 
