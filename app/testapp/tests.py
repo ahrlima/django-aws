@@ -1,12 +1,11 @@
-import os
-
-from django.test import SimpleTestCase
+from django.test import Client, SimpleTestCase
 
 
-class TestClass(SimpleTestCase):
+class HealthCheckTests(SimpleTestCase):
+    def setUp(self):
+        self.client = Client()
 
-    def test_success(self):
-        required_setting = os.getenv('REQUIRED_SETTING', None)
-        self.assertIsNotNone(required_setting, 'Environment setting \"REQUIRED_SETTING\" was not found. '
-                                               'Set REQUIRED_SETTING to any value for this test to pass.')
-
+    def test_healthz_returns_ok(self):
+        response = self.client.get("/healthz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode(), "OK")
