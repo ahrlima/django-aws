@@ -3,7 +3,6 @@ import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
-import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as logs from "aws-cdk-lib/aws-logs";
@@ -17,8 +16,7 @@ export interface EcsConstructProps {
   cpu: number;
   memoryMiB: number;
   desiredCount: number;
-  repository: ecr.IRepository;
-  imageTag: string;
+  containerImage: ecs.ContainerImage;
   containerPort: number;
   assignPublicIp: boolean;
   minCapacity: number;
@@ -82,7 +80,7 @@ export class EcsConstruct extends Construct {
 
     taskDefinition.addContainer("AppContainer", {
       containerName: props.namer("container"),
-      image: ecs.ContainerImage.fromEcrRepository(props.repository, props.imageTag),
+      image: props.containerImage,
       logging: ecs.LogDrivers.awsLogs({
         logGroup: props.logGroup,
         streamPrefix: props.namer("stream"),

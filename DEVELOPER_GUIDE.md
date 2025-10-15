@@ -68,12 +68,10 @@ the team.
 - Trigger: push to `main` (and manual dispatch)
 - Steps:
   1. Install CDK dependencies (`npm ci && npm run build`)
-  2. Derive the repo URI from the deployed stack output
-  3. Build the Docker image from `app/`, run `python manage.py test` inside the container
-  4. Push the image to ECR
-5. Deploy the stack via `cdk deploy -c env=dev -c imageTag=<commit-sha>`
+  2. Build the Docker image from `app/` and run `python manage.py test` inside the container
+  3. Deploy the stacks via `cdk deploy -c env=dev NetworkStack-dev DataStack-dev AppStack-dev`
 
-Make sure the stack has been deployed once manually so the ECR repository exists. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stack; the workflow uses that role instead of long-lived access keys.
+Ensure the target account/region has been bootstrapped (`cdk bootstrap`) so the CDK can push Docker assets. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stacks; the workflow uses that role instead of long-lived access keys.
 
 ### Region overrides
 The stack derives its AWS region from the environment configuration (`config/environments.ts`). To target a different region during deployment or CI, pass `-c region=<aws-region>` to `cdk synth|deploy`; that value takes precedence over both the environment file and shell variables such as `CDK_DEFAULT_REGION`.

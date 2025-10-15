@@ -1,7 +1,9 @@
+import * as path from "path";
 import * as cdk from "aws-cdk-lib";
-import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as guardduty from "aws-cdk-lib/aws-guardduty";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
+import * as ecs from "aws-cdk-lib/aws-ecs";
+import * as ecrAssets from "aws-cdk-lib/aws-ecr-assets";
 import type * as ec2 from "aws-cdk-lib/aws-ec2";
 import type * as rds from "aws-cdk-lib/aws-rds";
 import type * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
@@ -20,14 +22,13 @@ export interface AppStackProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   database: rds.DatabaseInstance;
   databaseSecret: secretsmanager.ISecret;
-  defaultImageTag: string;
 }
 
 export class AppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
 
-    const { envName, config, globals, nameFor, vpc, database, databaseSecret, defaultImageTag } = props;
+    const { envName, config, globals, nameFor, vpc, database, databaseSecret } = props;
 
     applyGlobalTags(this, envName, {
       confidentiality: config.confidentiality ?? globals.tags.confidentiality,
@@ -42,23 +43,17 @@ export class AppStack extends cdk.Stack {
       alertEmail: config.observability.alertEmail,
     });
 
-    const repository = new ecr.Repository(this, "AppRepository", {
-      repositoryName: nameFor("app"),
-      imageScanOnPush: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      lifecycleRules: [{ maxImageCount: 10 }],
+    const appImageAsset = new ecrAssets.DockerImageAsset(this, "AppImage", {
+      directory: path.join(__dirname, "../../app"),
     });
 
-    const imageTag = this.node.tryGetContext("imageTag") ?? defaultImageTag;
-
-    const ecs = new EcsConstruct(this, "Ecs", {
+    const ecsConstruct = new EcsConstruct(this, "Ecs", {
       vpc,
       namer: nameFor,
       cpu: config.ecs.cpu,
       memoryMiB: config.ecs.memoryMiB,
       desiredCount: config.ecs.desiredCount,
-      repository,
-      imageTag,
+      containerImage: ecs.ContainerImage.fromDockerImageAsset(appImageAsset),
       containerPort: config.ecs.containerPort,
       assignPublicIp: config.ecs.assignPublicIp,
       minCapacity: config.ecs.minCapacity,
@@ -76,8 +71,8 @@ export class AppStack extends cdk.Stack {
       environmentName: envName,
     });
 
-    observability.configureServiceAlarms(ecs.service);
-    observability.configureAlbAlarms(ecs.alb);
+    observability.configureServiceAlarms(ecsConstruct.service);
+    observability.configureAlbAlarms(ecsConstruct.alb);
 
     if (globals.security.enableGuardDuty) {
       new guardduty.CfnDetector(this, "GuardDutyDetector", { enable: true });
@@ -96,13 +91,14 @@ export class AppStack extends cdk.Stack {
       });
 
       new wafv2.CfnWebACLAssociation(this, "WebAclAssociation", {
-        resourceArn: ecs.alb.loadBalancerArn,
+        resourceArn: ecsConstruct.alb.loadBalancerArn,
         webAclArn: webAcl.attrArn,
       });
     }
 
-    new cdk.CfnOutput(this, "AlbDnsName", { value: ecs.alb.loadBalancerDnsName });
+    new cdk.CfnOutput(this, "AlbDnsName", { value: ecsConstruct.alb.loadBalancerDnsName });
     new cdk.CfnOutput(this, "RdsEndpoint", { value: database.dbInstanceEndpointAddress });
-    new cdk.CfnOutput(this, "EcrRepositoryUri", { value: repository.repositoryUri });
+    new cdk.CfnOutput(this, "EcrRepositoryUri", { value: appImageAsset.repository.repositoryUri });
+    new cdk.CfnOutput(this, "AppImageUri", { value: appImageAsset.imageUri });
   }
 }

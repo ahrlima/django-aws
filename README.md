@@ -23,7 +23,7 @@ cdk bootstrap --region us-east-1
 cdk deploy --region us-east-1 -c env=dev NetworkStack-dev DataStack-dev AppStack-dev
 ```
 
-> Replace the container image in `config/environments.ts` (or override with `-c imageTag=`) with the tag you publish to ECR for your Django app.
+> The `AppStack` builds and publishes the Docker image from `app/` automatically during `cdk deploy`; no manual ECR push or `-c imageTag` override is required.
 
 > Because the app now synthesizes three stacks (`NetworkStack`, `DataStack`, and `AppStack`), the CDK CLI needs the explicit stack names (or `--all`) when you deploy.
 
@@ -33,7 +33,6 @@ All environment-specific settings live in `config/environments.ts`. Duplicate th
 - `nat.useNatInstance` toggles the development NAT instance in place of NAT Gateways.
 - `rds.enableReplica` provisions an optional read replica when set to `true`.
 - The primary RDS instance is provisioned with deletion protection and a `RETAIN` removal policy so the database survives stack rollbacks or accidental deletes, and the DbInit Lambda now reads the master credentials from Secrets Manager instead of relying on IAM tokens.
-- `ecs.imageTag` chooses which tag the ECS service should deploy from the provisioned ECR repository.
 - `observability.alertEmail` sets the destination for CloudWatch alarms.
 
 Global defaults (naming, tagging, security toggles) are defined in `config/globals.ts`.
@@ -41,34 +40,28 @@ Global defaults (naming, tagging, security toggles) are defined in `config/globa
 Pass `-c env=<name>` (or `-c environment=<name>`) to select which configuration block to deploy.
 
 ## Application image
-The stack now creates an Amazon ECR repository (`EcrRepositoryUri` output). Build the container in `app/`, push it to that repository, and update the running service by supplying the new tag (`-c imageTag=<tag>`). The default configuration ships with `imageTag: "latest"` for local iteration.
+During deployment the CDK builds the Docker image located in `app/` and pushes it to ECR as a Docker asset. The outputs `EcrRepositoryUri` and `AppImageUri` expose the generated image location (URI includes the digest).
 
 Example manual flow:
 
 ```bash
-# Build & test locally
-docker build -t myapp ./app
-docker run --rm myapp python manage.py test
+# Build & test locally (optional but recommended)
+docker build -t myapp-under-test ./app
+docker run --rm -e DJANGO_SETTINGS_MODULE=testapp.settings myapp-under-test python manage.py test
 
-# Authenticate to ECR and push
-aws ecr get-login-password --region us-east-1 | \
-  docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
-docker tag myapp <repo-uri>:latest
-docker push <repo-uri>:latest
+# Deploy (image will be rebuilt and published automatically)
+cdk deploy --region us-east-1 -c env=dev NetworkStack-dev DataStack-dev AppStack-dev
 
-# Deploy infrastructure/tasks with that tag
-cdk deploy --region us-east-1 -c env=dev -c imageTag=latest NetworkStack-dev DataStack-dev AppStack-dev
-
-# Subsequent application-only rollout (after VPC / RDS already exist)
-cdk deploy --region us-east-1 -c env=dev -c imageTag=<new-tag> AppStack-dev
+# Subsequent updates (app-only)
+cdk deploy --region us-east-1 -c env=dev AppStack-dev
 
 > Tip: the stack now honours a `-c region=<aws-region>` context override. Use it if you need to deploy an environment to a region different from the default defined in `config/environments.ts`.
 ```
 
 ## CI/CD (GitHub Actions)
-A workflow in `.github/workflows/deploy.yml` automates build → test → push → deploy on pushes to `main`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to push to ECR and run CDK.
+A workflow in `.github/workflows/deploy.yml` automates build → test → deploy on pushes to `main`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to deploy the stacks and publish CDK assets (ECR + S3) in the target account.
 
-Adjust the region/stack variables at the top of the workflow if necessary. Perform the first deploy manually (`cdk deploy -c env=dev`) to create the ECR repository before the pipeline attempts to push.
+Adjust the region/stack variables at the top of the workflow if necessary. Ensure the environment has been bootstrapped (`cdk bootstrap`) so the CDK can provision asset repositories automatically.
 
 ## Cost Awareness Summary
 - **RDS t3.micro**: covered by Free Tier (up to 750 hours)

@@ -8,7 +8,6 @@ on:
 env:
   AWS_REGION: us-east-1
   CDK_ENV: dev
-  STACK_NAME: MainStack-dev
 
 jobs:
   build-and-deploy:
@@ -34,42 +33,17 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Build CDK project
         run: npm run build
-      - name: Resolve image tag
-        id: vars
+      - name: Build application image for tests
         run: |
-          IMAGE_TAG=${GITHUB_SHA::12}
-          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
-      - name: Fetch ECR repository URI
-        id: repo
-        run: |
-          REPO_URI=$(aws cloudformation describe-stacks \
-            --stack-name "${STACK_NAME}" \
-            --query "Stacks[0].Outputs[?OutputKey=='EcrRepositoryUri'].OutputValue" \
-            --output text)
-          if [ -z "$REPO_URI" ]; then
-            echo "ECR repository output not found. Deploy infrastructure manually once to create it." >&2
-            exit 1
-          fi
-          echo "repository_uri=${REPO_URI}" >> "$GITHUB_OUTPUT"
-      - name: Log in to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-      - name: Build application image
-        run: |
-          docker build -t "${{ steps.repo.outputs.repository_uri }}:${{ steps.vars.outputs.image_tag }}" ./app
+          docker build -t app-under-test:${GITHUB_SHA::12} ./app
       - name: Run container tests
         run: |
           docker run --rm \
             -e DJANGO_SETTINGS_MODULE=testapp.settings \
-            "${{ steps.repo.outputs.repository_uri }}:${{ steps.vars.outputs.image_tag }}" \
+            app-under-test:${GITHUB_SHA::12} \
             python manage.py test
-      - name: Push image
-        run: |
-          docker push "${{ steps.repo.outputs.repository_uri }}:${{ steps.vars.outputs.image_tag }}"
       - name: Deploy infrastructure
-        env:
-          IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
         run: |
-          npx cdk deploy MainStack-${CDK_ENV} \
+          npx cdk deploy NetworkStack-${CDK_ENV} DataStack-${CDK_ENV} AppStack-${CDK_ENV} \
             --require-approval never \
-            -c env=${CDK_ENV} \
-            -c imageTag=${IMAGE_TAG}
+            -c env=${CDK_ENV}

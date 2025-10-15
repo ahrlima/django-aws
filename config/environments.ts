@@ -29,7 +29,6 @@ export interface EcsSettings {
   cpu: number;
   memoryMiB: number;
   desiredCount: number;
-  imageTag: string;
   containerPort: number;
   assignPublicIp: boolean;
   minCapacity: number;
@@ -86,7 +85,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       cpu: 256,
       memoryMiB: 512,
       desiredCount: 1,
-      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: true,
       minCapacity: 1,
@@ -123,7 +121,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       cpu: 512,
       memoryMiB: 1024,
       desiredCount: 2,
-      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: false,
       minCapacity: 1,
@@ -160,7 +157,6 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       cpu: 512,
       memoryMiB: 1024,
       desiredCount: 3,
-      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: false,
       minCapacity: 2,
