@@ -8,6 +8,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as logs from "aws-cdk-lib/aws-logs";
 import type { SecurityDefaults } from "../../config/globals";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 
 export interface EcsConstructProps {
   vpc: ec2.IVpc;
@@ -26,10 +27,13 @@ export interface EcsConstructProps {
   certificateArn?: string;
   logGroup: logs.ILogGroup;
   database: rds.DatabaseInstance;
+  databaseSecret: secretsmanager.ISecret;
   databaseName: string;
   databaseUser: string;
   environmentName: string;
   region: string;
+  databaseSecurityGroupIds: string[];
+  databasePort?: number;
 }
 
 /**
@@ -46,6 +50,13 @@ export class EcsConstruct extends Construct {
     const cluster = new ecs.Cluster(this, "Cluster", {
       vpc: props.vpc,
       clusterName: props.namer("ecs-cluster"),
+    });
+
+    const serviceSecurityGroup = new ec2.SecurityGroup(this, "ServiceSecurityGroup", {
+      vpc: props.vpc,
+      allowAllOutbound: true,
+      securityGroupName: props.namer("sg-ecs"),
+      description: "Security group for ECS service tasks",
     });
 
     const taskDefinition = new ecs.FargateTaskDefinition(this, "TaskDefinition", {
@@ -84,6 +95,9 @@ export class EcsConstruct extends Construct {
         DB_USER: props.databaseUser,
         DB_HOST: props.database.dbInstanceEndpointAddress,
       },
+      secrets: {
+        DB_PASSWORD: ecs.Secret.fromSecretsManager(props.databaseSecret, "password"),
+      },
     });
 
     this.service = new ecs.FargateService(this, "Service", {
@@ -93,6 +107,7 @@ export class EcsConstruct extends Construct {
       desiredCount: props.desiredCount,
       assignPublicIp: props.assignPublicIp,
       circuitBreaker: { enable: true, rollback: true },
+      securityGroups: [serviceSecurityGroup],
     });
 
     const scaling = this.service.autoScaleTaskCount({
@@ -163,10 +178,17 @@ export class EcsConstruct extends Construct {
       ec2.Port.tcp(props.containerPort),
       "Allow ALB to reach service tasks",
     );
-    props.database.connections.allowFrom(
-      this.service,
-      ec2.Port.tcp(5432),
-      "Allow ECS tasks to reach PostgreSQL",
-    );
+    const dbPort = props.databasePort ?? 5432;
+
+    props.databaseSecurityGroupIds.forEach((groupId, index) => {
+      new ec2.CfnSecurityGroupIngress(this, `DbIngress${index}`, {
+        groupId,
+        sourceSecurityGroupId: serviceSecurityGroup.securityGroupId,
+        ipProtocol: "tcp",
+        fromPort: dbPort,
+        toPort: dbPort,
+        description: "Allow ECS tasks to reach PostgreSQL",
+      });
+    });
   }
 }

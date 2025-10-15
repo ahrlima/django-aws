@@ -1,8 +1,8 @@
 import * as cdk from "aws-cdk-lib";
 import type { Construct } from "constructs";
-import type { EnvironmentName, EnvironmentSettings } from "../config/environments";
-import type { GlobalsConfig } from "../config/globals";
-import { applyGlobalTags } from "../config/globals";
+import type { EnvironmentName, EnvironmentSettings } from "../../config/environments";
+import type { GlobalsConfig } from "../../config/globals";
+import { applyGlobalTags } from "../../config/globals";
 import type * as ec2 from "aws-cdk-lib/aws-ec2";
 import type * as rds from "aws-cdk-lib/aws-rds";
 import { RdsConstruct } from "../constructs/rds";
@@ -53,6 +53,7 @@ export class DataStack extends cdk.Stack {
       databaseName: config.rds.databaseName,
       adminUser: config.rds.adminUser,
       appUser: config.rds.appUser,
+      secret: databaseConstruct.db.secret!,
     });
   }
 }

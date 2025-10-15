@@ -6,6 +6,7 @@ import * as rds from "aws-cdk-lib/aws-rds";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as cr from "aws-cdk-lib/custom-resources";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha";
 
 export interface DbInitProps {
@@ -16,6 +17,7 @@ export interface DbInitProps {
   databaseName: string;
   adminUser: string;
   appUser: string;
+  secret: secretsmanager.ISecret;
 }
 
 /**
@@ -39,8 +41,9 @@ export class DbInitConstruct extends Construct {
         DB_USER: props.adminUser,
         DB_NAME: props.databaseName,
         APP_USER: props.appUser,
+        DB_SECRET_ARN: props.secret.secretArn,
       },
-      timeout: Duration.minutes(2),
+      timeout: Duration.seconds(30),
     });
 
     fn.addToRolePolicy(
@@ -49,6 +52,8 @@ export class DbInitConstruct extends Construct {
         resources: ["*"],
       }),
     );
+
+    props.secret.grantRead(fn);
 
     props.database.connections.allowFrom(
       fn,

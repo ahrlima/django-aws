@@ -21,8 +21,8 @@ export interface RdsConstructProps {
 }
 
 /**
- * Provisions the primary PostgreSQL instance (and optional replica) with IAM
- * authentication, encryption at rest, and globally consistent identifiers.
+ * Provisions the primary PostgreSQL instance (and optional replica) 
+ * with encryption at rest, and globally consistent identifiers.
  */
 export class RdsConstruct extends Construct {
   readonly db: rds.DatabaseInstance;
@@ -57,8 +57,9 @@ export class RdsConstruct extends Construct {
       cloudwatchLogsExports: ["postgresql"],
       cloudwatchLogsRetention: logs.RetentionDays.ONE_WEEK,
     });
-
-    this.db.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN, {
+    this.db.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
+    const cfnDbInstance = this.db.node.defaultChild as rds.CfnDBInstance;
+    cfnDbInstance.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN, {
       applyToUpdateReplacePolicy: true,
     });
 
@@ -72,7 +73,9 @@ export class RdsConstruct extends Construct {
         deletionProtection: true,
         publiclyAccessible: false,
       });
-      this.replica.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN, {
+      this.replica.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
+      const cfnReplica = this.replica.node.defaultChild as rds.CfnDBInstance;
+      cfnReplica.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN, {
         applyToUpdateReplacePolicy: true,
       });
     }

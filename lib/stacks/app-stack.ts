@@ -4,10 +4,11 @@ import * as guardduty from "aws-cdk-lib/aws-guardduty";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import type * as ec2 from "aws-cdk-lib/aws-ec2";
 import type * as rds from "aws-cdk-lib/aws-rds";
+import type * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import type { Construct } from "constructs";
-import type { EnvironmentName, EnvironmentSettings } from "../config/environments";
-import type { GlobalsConfig } from "../config/globals";
-import { applyGlobalTags } from "../config/globals";
+import type { EnvironmentName, EnvironmentSettings } from "../../config/environments";
+import type { GlobalsConfig } from "../../config/globals";
+import { applyGlobalTags } from "../../config/globals";
 import { ObservabilityConstruct } from "../constructs/observability";
 import { EcsConstruct } from "../constructs/ecs";
 
@@ -18,6 +19,7 @@ export interface AppStackProps extends cdk.StackProps {
   nameFor: (resource: string) => string;
   vpc: ec2.IVpc;
   database: rds.DatabaseInstance;
+  databaseSecret: secretsmanager.ISecret;
   defaultImageTag: string;
 }
 
@@ -25,7 +27,7 @@ export class AppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
 
-    const { envName, config, globals, nameFor, vpc, database, defaultImageTag } = props;
+    const { envName, config, globals, nameFor, vpc, database, databaseSecret, defaultImageTag } = props;
 
     applyGlobalTags(this, envName, {
       confidentiality: config.confidentiality ?? globals.tags.confidentiality,
@@ -66,6 +68,8 @@ export class AppStack extends cdk.Stack {
       security: globals.security,
       logGroup: observability.logGroup,
       database,
+      databaseSecret,
+      databaseSecurityGroupIds: database.connections.securityGroups.map((sg) => sg.securityGroupId),
       databaseName: config.rds.databaseName,
       databaseUser: config.rds.appUser,
       region: config.region,

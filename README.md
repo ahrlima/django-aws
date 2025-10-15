@@ -20,17 +20,19 @@ Production-style infrastructure (IaC) for a Django app on **Amazon ECS Fargate**
 ```bash
 npm install
 cdk bootstrap --region us-east-1
-cdk deploy --region us-east-1 -c env=dev
+cdk deploy --region us-east-1 -c env=dev NetworkStack-dev DataStack-dev AppStack-dev
 ```
 
-> Replace the container image in `lib/constructs/ecs.ts` (or the matching entry in `config/environments.ts`) with the image you publish to ECR for your Django app.
+> Replace the container image in `config/environments.ts` (or override with `-c imageTag=`) with the tag you publish to ECR for your Django app.
+
+> Because the app now synthesizes three stacks (`NetworkStack`, `DataStack`, and `AppStack`), the CDK CLI needs the explicit stack names (or `--all`) when you deploy.
 
 ## Configure environments
 All environment-specific settings live in `config/environments.ts`. Duplicate the `dev` block or override the fields below to suit your deployment:
 - `service` and `client` control the naming convention for AWS resources.
 - `nat.useNatInstance` toggles the development NAT instance in place of NAT Gateways.
 - `rds.enableReplica` provisions an optional read replica when set to `true`.
-- The primary RDS instance is provisioned with deletion protection and a `RETAIN` removal policy so the database survives stack rollbacks or accidental deletes.
+- The primary RDS instance is provisioned with deletion protection and a `RETAIN` removal policy so the database survives stack rollbacks or accidental deletes, and the DbInit Lambda now reads the master credentials from Secrets Manager instead of relying on IAM tokens.
 - `ecs.imageTag` chooses which tag the ECS service should deploy from the provisioned ECR repository.
 - `observability.alertEmail` sets the destination for CloudWatch alarms.
 
@@ -55,7 +57,10 @@ docker tag myapp <repo-uri>:latest
 docker push <repo-uri>:latest
 
 # Deploy infrastructure/tasks with that tag
-cdk deploy --region us-east-1 -c env=dev -c imageTag=latest
+cdk deploy --region us-east-1 -c env=dev -c imageTag=latest NetworkStack-dev DataStack-dev AppStack-dev
+
+# Subsequent application-only rollout (after VPC / RDS already exist)
+cdk deploy --region us-east-1 -c env=dev -c imageTag=<new-tag> AppStack-dev
 
 > Tip: the stack now honours a `-c region=<aws-region>` context override. Use it if you need to deploy an environment to a region different from the default defined in `config/environments.ts`.
 ```

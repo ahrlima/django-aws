@@ -39,6 +39,12 @@ export class NatInstanceConstruct extends Construct {
       description: "Security group for NAT instance (prefer SSM over SSH).",
     });
 
+    securityGroup.addIngressRule(
+      ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+      ec2.Port.allTraffic(),
+      "Allow private subnets to route through NAT",
+    );
+
     for (const cidr of props.allowedSshCidrs) {
       securityGroup.addIngressRule(
         ec2.Peer.ipv4(cidr),
@@ -88,6 +94,20 @@ export class NatInstanceConstruct extends Construct {
     new cdk.CfnOutput(this, "NatInstancePublicIp", {
       value: this.instance.instancePublicIp,
       description: "Public IP of the NAT instance",
+    });
+
+    const natInstance = this.instance;
+    if (!natInstance) {
+      return;
+    }
+
+    props.vpc.privateSubnets.forEach((subnet, index) => {
+      const route = new ec2.CfnRoute(this, `NatInstanceDefaultRoute${index}`, {
+        routeTableId: subnet.routeTable.routeTableId,
+        destinationCidrBlock: "0.0.0.0/0",
+        instanceId: natInstance.instanceId,
+      });
+      route.node.addDependency(natInstance);
     });
   }
 }

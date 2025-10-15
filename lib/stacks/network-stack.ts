@@ -1,7 +1,7 @@
 import * as cdk from "aws-cdk-lib";
-import type { EnvironmentName, EnvironmentSettings } from "../config/environments";
-import type { GlobalsConfig } from "../config/globals";
-import { applyGlobalTags } from "../config/globals";
+import type { EnvironmentName, EnvironmentSettings } from "../../config/environments";
+import type { GlobalsConfig } from "../../config/globals";
+import { applyGlobalTags } from "../../config/globals";
 import { VpcConstruct } from "../constructs/vpc";
 import { NatInstanceConstruct } from "../constructs/nat-instance";
 import type { Construct } from "constructs";

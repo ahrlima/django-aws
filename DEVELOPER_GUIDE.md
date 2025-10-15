@@ -18,10 +18,13 @@ lib/
   constructs/
     vpc.ts             # VPC with manual AZ selection, /26 public & /22 private
     nat-instance.ts    # EC2 NAT for dev/lab (Free Tier mode)
-    rds.ts             # RDS Postgres with IAM Auth, deletion protection, and optional replica
+    rds.ts             # RDS Postgres with IAM Auth, deletion protection, Secrets Manager credentials, optional replica
     ecs.ts             # ECS Fargate + ALB + autoscaling
     observability.ts   # CloudWatch logs, metrics, SNS
-  main-stack.ts        # Orchestration of all modules
+  stacks/
+    network-stack.ts   # Network foundation (VPC, NAT)
+    data-stack.ts      # RDS + DbInit
+    app-stack.ts       # Observability + ECS + ALB
 config/
   environments.ts      # Per-environment settings (region, CIDR, scaling, emails)
   globals.ts           # Naming helpers, default tags, security toggles
@@ -53,7 +56,7 @@ During development, we use a **NAT Instance (EC2 t3.micro)** instead of a NAT Ga
 ```bash
 npm install
 cdk bootstrap aws://<your-account-id>/us-east-1
-cdk deploy -c env=dev
+cdk deploy -c env=dev NetworkStack-dev DataStack-dev AppStack-dev
 ```
 
 Deployment metadata (service name, client, NAT strategy, tags) is defined in

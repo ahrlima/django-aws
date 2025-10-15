@@ -43,6 +43,7 @@ const appStack = new AppStack(app, `AppStack-${envName}`, {
   nameFor,
   vpc: networkStack.vpc,
   database: dataStack.database,
+  databaseSecret: dataStack.database.secret!,
   defaultImageTag: config.ecs.imageTag,
 });
 
