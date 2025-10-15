@@ -4,17 +4,28 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      environments:
+        description: 'JSON array with the environments to deploy (e.g. ["dev","hml"])'
+        required: false
+        default: '["dev"]'
+      imageTag:
+        description: 'Optional image tag to deploy (defaults to build output)'
+        required: false
 
 env:
   AWS_REGION: us-east-1
-  CDK_ENV: dev
+  ECR_REPOSITORY: django-app
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      skip_build: ${{ steps.vars.outputs.skip_build }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,22 +40,97 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          role-session-name: github-actions
+          role-session-name: github-actions-build
           aws-region: ${{ env.AWS_REGION }}
-      - name: Build CDK project
-        run: npm run build
-      - name: Build application image for tests
+      - name: Resolve image tag
+        id: vars
         run: |
-          docker build -t app-under-test:${GITHUB_SHA::12} ./app
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.imageTag }}" ]; then
+            IMAGE_TAG='${{ github.event.inputs.imageTag }}'
+            SKIP_BUILD=true
+          else
+            IMAGE_TAG=${GITHUB_SHA::12}
+            SKIP_BUILD=false
+          fi
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "skip_build=${SKIP_BUILD}" >> "$GITHUB_OUTPUT"
+      - name: Resolve repository URI
+        id: repo
+        run: |
+          REPO_URI=$(aws ecr describe-repositories \
+            --repository-names "${ECR_REPOSITORY}" \
+            --query "repositories[0].repositoryUri" \
+            --output text 2>/tmp/ecr_error || true)
+          if [ -z "$REPO_URI" ] || [ "$REPO_URI" = "None" ]; then
+            cat /tmp/ecr_error >&2 || true
+            echo "ECR repository '${ECR_REPOSITORY}' not found. Deploy the stack that creates it (usually AppStack-dev) first." >&2
+            exit 1
+          fi
+          echo "repository_uri=${REPO_URI}" >> "$GITHUB_OUTPUT"
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        if: steps.vars.outputs.skip_build != 'true'
+      - name: Build application image
+        if: steps.vars.outputs.skip_build != 'true'
+        run: |
+          docker build -t "${{ steps.repo.outputs.repository_uri }}:${{ steps.vars.outputs.image_tag }}" ./app
       - name: Run container tests
+        if: steps.vars.outputs.skip_build != 'true'
         run: |
           docker run --rm \
             -e DJANGO_SETTINGS_MODULE=testapp.settings \
             -e REQUIRED_SETTING=ok \
-            app-under-test:${GITHUB_SHA::12} \
+            "${{ steps.repo.outputs.repository_uri }}:${{ steps.vars.outputs.image_tag }}" \
             python manage.py test
-      - name: Deploy infrastructure
+      - name: Push image
+        if: steps.vars.outputs.skip_build != 'true'
         run: |
+          docker push "${{ steps.repo.outputs.repository_uri }}:${{ steps.vars.outputs.image_tag }}"
+          docker tag "${{ steps.repo.outputs.repository_uri }}:${{ steps.vars.outputs.image_tag }}" "${{ steps.repo.outputs.repository_uri }}:latest"
+          docker push "${{ steps.repo.outputs.repository_uri }}:latest"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ success() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.environments || '["dev"]') }}
+    environment: ${{ matrix.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE_TAG: ${{ github.event.inputs.imageTag || needs.build.outputs.image_tag }}
+      CDK_ENV: ${{ matrix.environment }}
+      INPUT_IMAGE_TAG: ${{ github.event.inputs.imageTag }}
+      ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions-deploy
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Build CDK project
+        run: npm run build
+      - name: Deploy application stack
+        run: |
+          TAG="${IMAGE_TAG}"
+          if [ "${CDK_ENV}" = "dev" ] && [ -z "${INPUT_IMAGE_TAG}" ]; then
+            TAG="latest"
+          fi
           npx cdk deploy AppStack-${CDK_ENV} \
             --require-approval never \
-            -c env=${CDK_ENV}
+            -c env=${CDK_ENV} \
+            -c imageTag=${TAG}

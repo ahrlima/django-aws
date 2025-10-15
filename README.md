@@ -23,9 +23,11 @@ cdk bootstrap --region us-east-1
 cdk deploy --region us-east-1 -c env=dev NetworkStack-dev DataStack-dev AppStack-dev
 ```
 
-> The `AppStack` builds and publishes the Docker image from `app/` automatically during `cdk deploy`; no manual ECR push or `-c imageTag` override is required.
+> The first `AppStack` deploy provisions the Amazon ECR repository (`EcrRepositoryUri`). Push an image tag (defaults to `config.ecs.imageTag`, e.g., `latest`) before expecting the ECS service to pass health checks.
 
 > Because the app now synthesizes three stacks (`NetworkStack`, `DataStack`, and `AppStack`), the CDK CLI needs the explicit stack names (or `--all`) when you deploy.
+
+> Development (`env=dev`) has `buildOnDeploy=true`, so `cdk deploy` rebuilds and publishes the container image automatically—no manual ECR push required.
 
 ## Configure environments
 All environment-specific settings live in `config/environments.ts`. Duplicate the `dev` block or override the fields below to suit your deployment:
@@ -33,6 +35,9 @@ All environment-specific settings live in `config/environments.ts`. Duplicate th
 - `nat.useNatInstance` toggles the development NAT instance in place of NAT Gateways.
 - `rds.enableReplica` provisions an optional read replica when set to `true`.
 - The primary RDS instance is provisioned with deletion protection and a `RETAIN` removal policy so the database survives stack rollbacks or accidental deletes, and the DbInit Lambda now reads the master credentials from Secrets Manager instead of relying on IAM tokens.
+- `ecs.buildOnDeploy` controls whether the Docker image is built during `cdk deploy`. Keep it `true` for `dev` so the asset is rebuilt automatically; set it to `false` for staging/production so they consume an already published tag.
+- `ecs.repositoryName` and `ecs.manageRepository` configure the shared ECR repository when `buildOnDeploy=false`. Ensure exactly one environment sets `manageRepository=true` to create the repository.
+- `ecs.imageTag` determines the default tag deployed when no `-c imageTag=` override is supplied (the CI pipeline passes the commit hash automatically for non-dev environments; `dev` uses `latest`).
 - `observability.alertEmail` sets the destination for CloudWatch alarms.
 
 Global defaults (naming, tagging, security toggles) are defined in `config/globals.ts`.
@@ -40,30 +45,46 @@ Global defaults (naming, tagging, security toggles) are defined in `config/globa
 Pass `-c env=<name>` (or `-c environment=<name>`) to select which configuration block to deploy.
 
 ## Application image
-During deployment the CDK builds the Docker image located in `app/` and pushes it to ECR as a Docker asset. The outputs `EcrRepositoryUri` and `AppImageUri` expose the generated image location (URI includes the digest).
+For environments with `buildOnDeploy=true` (default `dev`) the CDK rebuilds and publishes the container image as part of `cdk deploy`, so no additional steps are required. For `buildOnDeploy=false` the ECS service expects an image to exist in the shared repository; use the flow below (or the CI pipeline) to publish the tag before deploying.
 
 Example manual flow:
 
 ```bash
+# After the first AppStack deploy, capture the repository URI from the stack outputs
+REPO_URI=<account-id>.dkr.ecr.us-east-1.amazonaws.com/django-app
+IMAGE_TAG=latest   # or whatever tag you plan to deploy
+
 # Build & test locally (optional but recommended)
 docker build -t myapp-under-test ./app
 docker run --rm -e DJANGO_SETTINGS_MODULE=testapp.settings myapp-under-test python manage.py test
 
-# Deploy (image will be rebuilt and published automatically)
-cdk deploy --region us-east-1 -c env=dev NetworkStack-dev DataStack-dev AppStack-dev
+# Push to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${REPO_URI}"
+docker tag myapp-under-test "${REPO_URI}:${IMAGE_TAG}"
+docker push "${REPO_URI}:${IMAGE_TAG}"
 
-# Subsequent updates (app-only)
+# Deploy (example for staging)
+cdk deploy --region us-east-1 -c env=hml -c imageTag=${IMAGE_TAG} NetworkStack-hml DataStack-hml AppStack-hml
+
+# Subsequent app-only rollouts (non-dev)
+cdk deploy --region us-east-1 -c env=hml -c imageTag=${IMAGE_TAG} AppStack-hml
+
+# Development (build-on-deploy)
 cdk deploy --region us-east-1 -c env=dev AppStack-dev
 
 > Tip: the stack now honours a `-c region=<aws-region>` context override. Use it if you need to deploy an environment to a region different from the default defined in `config/environments.ts`.
 ```
 
 ## CI/CD (GitHub Actions)
-A workflow in `.github/workflows/deploy.yml` automates build → test → deploy on pushes to `main`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to deploy the stacks and publish CDK assets (ECR + S3) in the target account.
+A workflow in `.github/workflows/deploy.yml` automates build → test → push → deploy on pushes to `main`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to push to ECR, run CDK (CloudFormation, IAM pass role), and access asset buckets in the target account.
 
-The pipeline deploys only `AppStack-<env>` so that infrastructure changes (VPC, RDS) can be rolled out deliberately. Run `cdk deploy ... NetworkStack-<env> DataStack-<env>` manually when you need to update those layers.
+The job runs once per environment provided. Pushes to `main` default to `["dev"]`; manual runs (`workflow_dispatch`) accept a JSON array such as `["hml","prd"]` and optionally an `imageTag` to redeploy a previously built artifact. Each matrix execution:
+1. Builds the image and runs Django tests.
+2. Resolves the environment-specific ECR repository from `AppStack-<env>` outputs.
+3. Tags and pushes `${GITHUB_SHA::12}` (immutable) and `latest` to that repository; the `latest` alias is consumed by `dev` automatically.
+4. Deploys `AppStack-<env>` with `-c env=<env> -c imageTag=<tag>` (uses `latest` implicitly for `dev` unless overridden).
 
-Adjust the region/stack variables at the top of the workflow if necessary. Ensure the environment has been bootstrapped (`cdk bootstrap`) so the CDK can provision asset repositories automatically.
+Infrastructure stacks (`NetworkStack`, `DataStack`) remain manual so schema/network changes are deliberate (`cdk deploy ... NetworkStack-<env> DataStack-<env>`). Ensure the account is bootstrapped (`cdk bootstrap`), the shared ECR repository exists (deploy the managing environment once), and that the workflow `ECR_REPOSITORY` variable aligns with `config.ecs.repositoryName`.
 
 ## Cost Awareness Summary
 - **RDS t3.micro**: covered by Free Tier (up to 750 hours)

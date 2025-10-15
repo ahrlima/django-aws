@@ -26,9 +26,13 @@ export interface RdsSettings {
 }
 
 export interface EcsSettings {
+  buildOnDeploy: boolean;
   cpu: number;
   memoryMiB: number;
   desiredCount: number;
+  repositoryName?: string;
+  manageRepository?: boolean;
+  imageTag: string;
   containerPort: number;
   assignPublicIp: boolean;
   minCapacity: number;
@@ -59,7 +63,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
   dev: {
     region: "us-east-1",
     service: "djg",
-    client: "and",
+    client: "ander",
     confidentiality: "internal",
     vpc: {
       cidr: "10.10.0.0/16",
@@ -82,9 +86,11 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       enableReplica: false,
     },
     ecs: {
+      buildOnDeploy: true,
       cpu: 256,
       memoryMiB: 512,
       desiredCount: 1,
+      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: true,
       minCapacity: 1,
@@ -99,7 +105,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
   hml: {
     region: "us-east-1",
     service: "django",
-    client: "matific",
+    client: "and",
     confidentiality: "restricted",
     vpc: {
       cidr: "10.20.0.0/16",
@@ -108,7 +114,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       useNatInstance: false,
     },
     rds: {
-      instanceType: "t3.small",
+      instanceType: "t3.micro",
       allocatedStorage: 50,
       multiAz: true,
       databaseName: "appdb",
@@ -118,9 +124,13 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       enableReplica: false,
     },
     ecs: {
+      buildOnDeploy: false,
       cpu: 512,
       memoryMiB: 1024,
       desiredCount: 2,
+      repositoryName: "django-app",
+      manageRepository: true,
+      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: false,
       minCapacity: 1,
@@ -135,7 +145,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
   prd: {
     region: "us-east-1",
     service: "django",
-    client: "matific",
+    client: "and",
     confidentiality: "confidential",
     vpc: {
       cidr: "10.30.0.0/16",
@@ -144,7 +154,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       useNatInstance: false,
     },
     rds: {
-      instanceType: "t3.small",
+      instanceType: "t3.micro",
       allocatedStorage: 100,
       multiAz: true,
       databaseName: "appdb",
@@ -154,9 +164,13 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       enableReplica: true,
     },
     ecs: {
+      buildOnDeploy: false,
       cpu: 512,
       memoryMiB: 1024,
       desiredCount: 3,
+      repositoryName: "django-app",
+      manageRepository: false,
+      imageTag: "latest",
       containerPort: 8000,
       assignPublicIp: false,
       minCapacity: 2,

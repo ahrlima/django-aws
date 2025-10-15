@@ -68,15 +68,24 @@ Deployment metadata (service name, client, NAT strategy, tags) is defined in
 `config/environments.ts` and `config/globals.ts`, keeping stacks consistent across
 the team.
 
+Per-environment ECS settings include:
+- `buildOnDeploy`: when `true` (e.g., `dev`) the CDK rebuilds the Docker image as part of `cdk deploy`; no external repository is required.
+- `repositoryName`/`manageRepository`: used when `buildOnDeploy=false` to identify the shared Amazon ECR repository (set `manageRepository=true` for exactly one environment so the repository is created, others reuse it).
+- `imageTag`: default tag consumed when `-c imageTag=` is not supplied (the CI pipeline passes the commit hash automatically; `dev` falls back to `latest`).
+
 ## CI/CD workflow
 - Workflow file: `.github/workflows/deploy.yml`
 - Trigger: push to `main` (and manual dispatch)
 - Steps:
   1. Install CDK dependencies (`npm ci && npm run build`)
   2. Build the Docker image from `app/` and run `python manage.py test` inside the container
-  3. Deploy the application stack via `cdk deploy -c env=dev AppStack-dev`
+  3. (When `buildOnDeploy=false`) Look up the environment-specific ECR repository from `AppStack-<env>` outputs
+  4. (When `buildOnDeploy=false`) Tag & push the image (`${GITHUB_SHA::12}`) and keep the `latest` alias up to date for development convenience
+  5. Deploy the application stack via `cdk deploy -c env=<env> -c imageTag=<tag> AppStack-<env>` (for `buildOnDeploy=true`, simply run `cdk deploy -c env=dev AppStack-dev`)
 
-Infrastructure stacks (`NetworkStack`, `DataStack`) must be deployed manually when changes are required. Ensure the target account/region has been bootstrapped (`cdk bootstrap`) so the CDK can push Docker assets. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stacks; the workflow uses that role instead of long-lived access keys.
+Pushes target the `dev` environment by default. Manual runs can specify a JSON array of environments (e.g., `["dev","hml"]`) and optionally provide an `imageTag` to redeploy an already published artifact without rebuilding.
+
+Infrastructure stacks (`NetworkStack`, `DataStack`) must be deployed manually when changes are required. Ensure the target account/region has been bootstrapped (`cdk bootstrap`) so the CDK can push Docker assets. Configure a repository secret `AWS_ROLE_TO_ASSUME` that points to an IAM role trusted for GitHub OIDC and permitted to deploy the stacks; the workflow uses that role instead of long-lived access keys. Deploy the “managing” environment (the one with `manageRepository=true`) once manually to create the shared ECR repository before allowing the workflow to publish images, and keep the workflow variable `ECR_REPOSITORY` aligned with `config.ecs.repositoryName`.
 
 ### Region overrides
 The stack derives its AWS region from the environment configuration (`config/environments.ts`). To target a different region during deployment or CI, pass `-c region=<aws-region>` to `cdk synth|deploy`; that value takes precedence over both the environment file and shell variables such as `CDK_DEFAULT_REGION`.

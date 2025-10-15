@@ -8,6 +8,7 @@ import * as rds from "aws-cdk-lib/aws-rds";
 import * as logs from "aws-cdk-lib/aws-logs";
 import type { SecurityDefaults } from "../../config/globals";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import type * as ecr from "aws-cdk-lib/aws-ecr";
 
 export interface EcsConstructProps {
   vpc: ec2.IVpc;
@@ -17,6 +18,7 @@ export interface EcsConstructProps {
   memoryMiB: number;
   desiredCount: number;
   containerImage: ecs.ContainerImage;
+  repository?: ecr.IRepository;
   containerPort: number;
   assignPublicIp: boolean;
   minCapacity: number;
@@ -61,6 +63,10 @@ export class EcsConstruct extends Construct {
       cpu: props.cpu,
       memoryLimitMiB: props.memoryMiB,
     });
+
+    if (props.repository) {
+      props.repository.grantPull(taskDefinition.obtainExecutionRole());
+    }
 
     taskDefinition.addToTaskRolePolicy(
       new iam.PolicyStatement({

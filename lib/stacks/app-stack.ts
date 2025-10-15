@@ -3,6 +3,7 @@ import * as cdk from "aws-cdk-lib";
 import * as guardduty from "aws-cdk-lib/aws-guardduty";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
+import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as ecrAssets from "aws-cdk-lib/aws-ecr-assets";
 import type * as ec2 from "aws-cdk-lib/aws-ec2";
 import type * as rds from "aws-cdk-lib/aws-rds";
@@ -22,13 +23,14 @@ export interface AppStackProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   database: rds.DatabaseInstance;
   databaseSecret: secretsmanager.ISecret;
+  defaultImageTag: string;
 }
 
 export class AppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
 
-    const { envName, config, globals, nameFor, vpc, database, databaseSecret } = props;
+    const { envName, config, globals, nameFor, vpc, database, databaseSecret, defaultImageTag } = props;
 
     applyGlobalTags(this, envName, {
       confidentiality: config.confidentiality ?? globals.tags.confidentiality,
@@ -43,9 +45,42 @@ export class AppStack extends cdk.Stack {
       alertEmail: config.observability.alertEmail,
     });
 
-    const appImageAsset = new ecrAssets.DockerImageAsset(this, "AppImage", {
-      directory: path.join(__dirname, "../../app"),
-    });
+    let containerImage: ecs.ContainerImage;
+    let repository: ecr.IRepository | undefined;
+    const outputs: { key: string; value: string }[] = [];
+
+    if (config.ecs.buildOnDeploy) {
+      const appImageAsset = new ecrAssets.DockerImageAsset(this, "AppImage", {
+        directory: path.join(__dirname, "../../app"),
+      });
+      containerImage = ecs.ContainerImage.fromDockerImageAsset(appImageAsset);
+      outputs.push({ key: "DevImageAssetUri", value: appImageAsset.imageUri });
+    } else {
+      if (!config.ecs.repositoryName) {
+        throw new Error("ecs.repositoryName must be defined when buildOnDeploy=false.");
+      }
+
+      const repoId = "AppRepository";
+      repository = config.ecs.manageRepository
+        ? new ecr.Repository(this, repoId, {
+            repositoryName: config.ecs.repositoryName,
+            imageScanOnPush: true,
+            removalPolicy: cdk.RemovalPolicy.RETAIN,
+            lifecycleRules: [{ maxImageCount: 10 }],
+          })
+        : ecr.Repository.fromRepositoryName(this, repoId, config.ecs.repositoryName);
+
+      const imageTag = this.node.tryGetContext("imageTag") ?? defaultImageTag;
+      containerImage = ecs.ContainerImage.fromEcrRepository(repository, imageTag);
+
+      const repositoryUri =
+        config.ecs.manageRepository && repository instanceof ecr.Repository
+          ? repository.repositoryUri
+          : `${cdk.Stack.of(this).account}.dkr.ecr.${cdk.Stack.of(this).region}.amazonaws.com/${config.ecs.repositoryName}`;
+
+      outputs.push({ key: "EcrRepositoryUri", value: repositoryUri });
+      outputs.push({ key: "AppImageTag", value: imageTag });
+    }
 
     const ecsConstruct = new EcsConstruct(this, "Ecs", {
       vpc,
@@ -53,7 +88,8 @@ export class AppStack extends cdk.Stack {
       cpu: config.ecs.cpu,
       memoryMiB: config.ecs.memoryMiB,
       desiredCount: config.ecs.desiredCount,
-      containerImage: ecs.ContainerImage.fromDockerImageAsset(appImageAsset),
+      containerImage,
+      repository,
       containerPort: config.ecs.containerPort,
       assignPublicIp: config.ecs.assignPublicIp,
       minCapacity: config.ecs.minCapacity,
@@ -98,7 +134,8 @@ export class AppStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "AlbDnsName", { value: ecsConstruct.alb.loadBalancerDnsName });
     new cdk.CfnOutput(this, "RdsEndpoint", { value: database.dbInstanceEndpointAddress });
-    new cdk.CfnOutput(this, "EcrRepositoryUri", { value: appImageAsset.repository.repositoryUri });
-    new cdk.CfnOutput(this, "AppImageUri", { value: appImageAsset.imageUri });
+    for (const output of outputs) {
+      new cdk.CfnOutput(this, output.key, { value: output.value });
+    }
   }
 }
