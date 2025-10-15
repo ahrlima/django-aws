@@ -45,6 +45,6 @@ jobs:
             python manage.py test
       - name: Deploy infrastructure
         run: |
-          npx cdk deploy NetworkStack-${CDK_ENV} DataStack-${CDK_ENV} AppStack-${CDK_ENV} \
+          npx cdk deploy AppStack-${CDK_ENV} \
             --require-approval never \
             -c env=${CDK_ENV}
