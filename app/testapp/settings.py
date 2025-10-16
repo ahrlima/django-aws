@@ -45,10 +45,8 @@ DEBUG = env_flag("DEBUG", default=False)
 hosts = env_list("ALLOWED_HOSTS")
 if hosts:
     ALLOWED_HOSTS = hosts
-elif DEBUG:
-    ALLOWED_HOSTS = ["*"]
 else:
-    ALLOWED_HOSTS = []
+    ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
