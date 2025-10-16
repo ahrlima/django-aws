@@ -43,6 +43,9 @@ export class AppStack extends cdk.Stack {
       logRetentionDays: config.observability.logRetentionDays,
       logKmsAlias: globals.security.kmsAliases?.logs,
       alertEmail: config.observability.alertEmail,
+      enableAlbAccessLogs: config.observability.albAccessLogs?.enabled ?? false,
+      albLogPrefix: config.observability.albAccessLogs?.prefix,
+      albLogExpirationDays: config.observability.albAccessLogs?.expirationDays,
     });
 
     let containerImage: ecs.ContainerImage;

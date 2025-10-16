@@ -7,6 +7,7 @@ import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as kms from "aws-cdk-lib/aws-kms";
+import * as s3 from "aws-cdk-lib/aws-s3";
 
 export interface ObservabilityProps {
   namer: (resource: string) => string;
@@ -14,6 +15,9 @@ export interface ObservabilityProps {
   logRetentionDays: number;
   logKmsAlias?: string;
   alertEmail?: string;
+  enableAlbAccessLogs?: boolean;
+  albLogPrefix?: string;
+  albLogExpirationDays?: number;
 }
 
 /**
@@ -23,6 +27,8 @@ export interface ObservabilityProps {
 export class ObservabilityConstruct extends Construct {
   readonly logGroup: logs.LogGroup;
   readonly alarmTopic: sns.Topic;
+  readonly albLogBucket?: s3.Bucket;
+  readonly albLogPrefix?: string;
 
   constructor(scope: Construct, id: string, props: ObservabilityProps) {
     super(scope, id);
@@ -44,6 +50,27 @@ export class ObservabilityConstruct extends Construct {
 
     if (props.alertEmail) {
       this.alarmTopic.addSubscription(new subs.EmailSubscription(props.alertEmail));
+    }
+
+    if (props.enableAlbAccessLogs) {
+      this.albLogPrefix = props.albLogPrefix ?? props.namer("alb");
+      this.albLogBucket = new s3.Bucket(this, "AlbAccessLogsBucket", {
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        versioned: false,
+        lifecycleRules:
+          props.albLogExpirationDays !== undefined
+            ? [
+                {
+                  enabled: true,
+                  expiration: cdk.Duration.days(props.albLogExpirationDays),
+                },
+              ]
+            : undefined,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      });
     }
   }
 
@@ -88,6 +115,10 @@ export class ObservabilityConstruct extends Construct {
    * Configures 5xx alarms on the supplied Application Load Balancer.
    */
   configureAlbAlarms(alb: elbv2.ApplicationLoadBalancer): void {
+    if (this.albLogBucket) {
+      alb.logAccessLogs(this.albLogBucket, this.albLogPrefix);
+    }
+
     const alb5xx = new cloudwatch.Metric({
       namespace: "AWS/ApplicationELB",
       metricName: "HTTPCode_Target_5XX_Count",

@@ -42,9 +42,16 @@ export interface EcsSettings {
   certificateArn?: string;
 }
 
+export interface ObservabilityAlbAccessLogSettings {
+  enabled: boolean;
+  prefix?: string;
+  expirationDays?: number;
+}
+
 export interface ObservabilitySettings {
   alertEmail?: string;
   logRetentionDays: number;
+  albAccessLogs?: ObservabilityAlbAccessLogSettings;
 }
 
 export interface EnvironmentSettings {
@@ -102,6 +109,11 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
     observability: {
       alertEmail: "alerts-dev@example.com",
       logRetentionDays: 7,
+      albAccessLogs: {
+        enabled: true,
+        prefix: "dev",
+        expirationDays: 30,
+      },
     },
   },
   hml: {
@@ -143,6 +155,11 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
     observability: {
       alertEmail: "alerts-hml@example.com",
       logRetentionDays: 14,
+      albAccessLogs: {
+        enabled: true,
+        prefix: "hml",
+        expirationDays: 45,
+      },
     },
   },
   prd: {
@@ -184,6 +201,11 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
     observability: {
       alertEmail: "alerts-prod@example.com",
       logRetentionDays: 30,
+      albAccessLogs: {
+        enabled: true,
+        prefix: "prd",
+        expirationDays: 90,
+      },
     },
     tagOverrides: {
       confidentiality: "secret",
