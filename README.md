@@ -76,7 +76,7 @@ cdk deploy --region us-east-1 -c env=dev AppStack-dev
 ```
 
 ## CI/CD (GitHub Actions)
-A workflow in `.github/workflows/deploy.yml` automates build → test → push → deploy on pushes to `main`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to push to ECR, run CDK (CloudFormation, IAM pass role), and access asset buckets in the target account.
+A workflow in `.github/workflows/deploy.yml` automates build → test → push → deploy whenever changes land under `app/**`. Configure the repository secret `AWS_ROLE_TO_ASSUME` with the ARN of an IAM role trusted for GitHub OIDC (`sts:AssumeRoleWithWebIdentity`). The role needs permissions to push to ECR, run CDK (CloudFormation, IAM pass role), and access asset buckets in the target account.
 
 The job runs once per environment provided. Pushes to `main` default to `["dev"]`; manual runs (`workflow_dispatch`) accept a JSON array such as `["hml","prd"]` and optionally an `imageTag` to redeploy a previously built artifact. Each matrix execution:
 1. Builds the image and runs Django tests.

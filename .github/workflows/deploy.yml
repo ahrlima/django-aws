@@ -3,6 +3,9 @@ name: CI/CD
 on:
   push:
     branches: ["main"]
+    paths:
+      - 'app/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
     inputs:
       environments:

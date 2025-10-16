@@ -75,7 +75,7 @@ Per-environment ECS settings include:
 
 ## CI/CD workflow
 - Workflow file: `.github/workflows/deploy.yml`
-- Trigger: push to `main` (and manual dispatch)
+- Trigger: push to `main` that touches `app/**` (and manual dispatch)
 - Steps:
   1. Install CDK dependencies (`npm ci && npm run build`)
   2. Build the Docker image from `app/` and run `python manage.py test` inside the container
