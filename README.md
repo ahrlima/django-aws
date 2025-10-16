@@ -109,6 +109,7 @@ Set `rds.enableReplica` to `true` in `config/environments.ts` (per environment) 
 - Integrate **Amazon Route 53** to provision custom DNS records for the ALB so the application is reached through branded hostnames instead of the default AWS address.
 - Issue **AWS Certificate Manager** certificates and wire them into the ALB listeners to serve traffic over HTTPS (port 443) end-to-end.
 - Replace the single-instance RDS with an **Amazon Aurora** cluster for improved availability, performance, and automatic storage scaling.
+- Introduce blue/green deploys via **ECS CodeDeploy** (or Step Functions) so new task sets warm up behind the scenes before shifting traffic, enabling canary/linear rollouts and near-instant rollback.
 - Add **Amazon Cognito** user pools (federated with IAM) to centralise identity and control which operators can access the AWS account and application backplane.
 
 ## NAT Instance (dev only)
