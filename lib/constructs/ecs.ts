@@ -24,6 +24,7 @@ export interface EcsConstructProps {
   minCapacity: number;
   maxCapacity: number;
   scalingTargetUtilization: number;
+  requestsPerTarget?: number;
   certificateArn?: string;
   logGroup: logs.ILogGroup;
   database: rds.DatabaseInstance;
@@ -131,6 +132,7 @@ export class EcsConstruct extends Construct {
       scaleOutCooldown: cdk.Duration.seconds(60),
     });
 
+    let targetGroup: elbv2.ApplicationTargetGroup;
     this.alb = new elbv2.ApplicationLoadBalancer(this, "Alb", {
       vpc: props.vpc,
       loadBalancerName: props.namer("alb"),
@@ -157,7 +159,7 @@ export class EcsConstruct extends Construct {
         certificates: [elbv2.ListenerCertificate.fromArn(props.certificateArn)],
       });
 
-      httpsListener.addTargets("HttpsTarget", targetProps);
+      targetGroup = httpsListener.addTargets("HttpsTarget", targetProps);
 
       this.alb.addListener("HttpRedirect", {
         port: 80,
@@ -174,7 +176,7 @@ export class EcsConstruct extends Construct {
         open: true,
       });
 
-      httpListener.addTargets("HttpTarget", targetProps);
+      targetGroup = httpListener.addTargets("HttpTarget", targetProps);
     }
 
     this.service.connections.allowFrom(
@@ -182,6 +184,16 @@ export class EcsConstruct extends Construct {
       ec2.Port.tcp(props.containerPort),
       "Allow ALB to reach service tasks",
     );
+
+    if (props.requestsPerTarget !== undefined) {
+      scaling.scaleOnRequestCount("RequestScaling", {
+        requestsPerTarget: props.requestsPerTarget,
+        targetGroup,
+        scaleInCooldown: cdk.Duration.seconds(60),
+        scaleOutCooldown: cdk.Duration.seconds(30),
+      });
+    }
+
     const dbPort = props.databasePort ?? 5432;
 
     props.databaseSecurityGroupIds.forEach((groupId, index) => {

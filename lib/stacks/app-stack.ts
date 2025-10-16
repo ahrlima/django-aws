@@ -95,6 +95,7 @@ export class AppStack extends cdk.Stack {
       minCapacity: config.ecs.minCapacity,
       maxCapacity: config.ecs.maxCapacity,
       scalingTargetUtilization: config.ecs.scalingTargetUtilization,
+      requestsPerTarget: config.ecs.requestsPerTarget,
       certificateArn: config.ecs.certificateArn,
       security: globals.security,
       logGroup: observability.logGroup,

@@ -38,6 +38,7 @@ export interface EcsSettings {
   minCapacity: number;
   maxCapacity: number;
   scalingTargetUtilization: number;
+  requestsPerTarget: number;
   certificateArn?: string;
 }
 
@@ -96,6 +97,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       minCapacity: 1,
       maxCapacity: 5,
       scalingTargetUtilization: 60,
+      requestsPerTarget: 200,
     },
     observability: {
       alertEmail: "alerts-dev@example.com",
@@ -136,6 +138,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       minCapacity: 1,
       maxCapacity: 6,
       scalingTargetUtilization: 60,
+      requestsPerTarget: 800,
     },
     observability: {
       alertEmail: "alerts-hml@example.com",
@@ -176,6 +179,7 @@ const ENVIRONMENTS: Record<EnvironmentName, EnvironmentSettings> = {
       minCapacity: 2,
       maxCapacity: 8,
       scalingTargetUtilization: 55,
+      requestsPerTarget: 1200,
     },
     observability: {
       alertEmail: "alerts-prod@example.com",
